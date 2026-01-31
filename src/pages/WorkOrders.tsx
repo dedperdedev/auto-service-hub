@@ -1,5 +1,5 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Search, Filter, MoreHorizontal } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -7,18 +7,35 @@ import { useDataStore } from '@/lib/dataStore';
 import { AppShell } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import WorkOrderDetail from './WorkOrderDetail';
 
 export default function WorkOrders() {
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { workOrders, getClientById, getVehicleById, workOrderServiceLines, getServiceById } = useDataStore();
+  const [search, setSearch] = useState('');
 
-  const sortedOrders = [...workOrders].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  // If we have an ID param, show the detail view
+  if (id) {
+    return <WorkOrderDetail />;
+  }
+
+  const filteredOrders = workOrders
+    .filter(wo => {
+      if (!search) return true;
+      const searchLower = search.toLowerCase();
+      const client = getClientById(wo.clientId);
+      return (
+        wo.number.toLowerCase().includes(searchLower) ||
+        client?.name.toLowerCase().includes(searchLower) ||
+        client?.phone.includes(search)
+      );
+    })
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <AppShell>
@@ -36,7 +53,13 @@ export default function WorkOrders() {
             <div className="flex items-center gap-4">
               <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input type="search" placeholder="Поиск по номеру, клиенту..." className="pl-9" />
+                <Input 
+                  type="search" 
+                  placeholder="Поиск по номеру, клиенту..." 
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
               <Button variant="outline" size="sm"><Filter className="h-4 w-4 mr-2" />Фильтры</Button>
             </div>
@@ -59,7 +82,7 @@ export default function WorkOrders() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedOrders.map((wo) => {
+                {filteredOrders.map((wo) => {
                   const client = getClientById(wo.clientId);
                   const vehicle = getVehicleById(wo.vehicleId);
                   const services = workOrderServiceLines
@@ -68,21 +91,38 @@ export default function WorkOrders() {
                     .filter(Boolean).join(', ');
 
                   return (
-                    <TableRow key={wo.id} className="table-row-hover cursor-pointer" onClick={() => navigate(`/work-orders/${wo.id}`)}>
+                    <TableRow 
+                      key={wo.id} 
+                      className="table-row-hover cursor-pointer" 
+                      onClick={() => navigate(`/work-orders/${wo.id}`)}
+                    >
                       <TableCell className="font-medium">{wo.number}</TableCell>
-                      <TableCell className="text-muted-foreground">{format(parseISO(wo.createdAt), 'dd.MM.yyyy', { locale: ru })}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(parseISO(wo.createdAt), 'dd.MM.yyyy', { locale: ru })}
+                      </TableCell>
                       <TableCell>{client?.name || '-'}</TableCell>
-                      <TableCell>{vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.plate})` : '-'}</TableCell>
+                      <TableCell>
+                        {vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.plate})` : '-'}
+                      </TableCell>
                       <TableCell><StatusBadge status={wo.status} /></TableCell>
                       <TableCell><StatusBadge status={wo.paymentStatus} /></TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground">{services || '-'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground">
+                        {services || '-'}
+                      </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => navigate(`/work-orders/${wo.id}`)}>Открыть</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/work-orders/${wo.id}`)}>
+                              Открыть
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => navigate(`/clients/${wo.clientId}`)}>
+                              Карточка клиента
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
